@@ -38,9 +38,9 @@ def execute_specialist(
     if metadata is None:
         metadata = {}
 
-    # ---------------------------------------------------------
-    # VQA specialist
-    # ---------------------------------------------------------
+    # =========================================================
+    # VQA SPECIALIST
+    # =========================================================
 
     if task == "vqa":
 
@@ -72,9 +72,22 @@ def execute_specialist(
                 question=query,
             )
 
-            answer = result.get("answer", "")
-            confidence = float(result.get("confidence", 0.0))
-            device = result.get("device", "unknown")
+            answer = result.get(
+                "answer",
+                ""
+            )
+
+            confidence = float(
+                result.get(
+                    "confidence",
+                    0.0
+                )
+            )
+
+            device = result.get(
+                "device",
+                "unknown"
+            )
 
             evidence = generate_evidence(
                 image_path=image_path,
@@ -119,9 +132,111 @@ def execute_specialist(
                 )
             )
 
-    # ---------------------------------------------------------
-    # Other specialists
-    # ---------------------------------------------------------
+    # =========================================================
+    # GROUNDING SPECIALIST
+    # =========================================================
+
+    if task == "grounding":
+
+        if len(images) < 1:
+            return asdict(
+                ToolResult(
+                    task=task,
+                    specialist=specialist,
+                    answer="No image supplied.",
+                    confidence=0.0,
+                    evidence=[],
+                    outputs={
+                        "image_count": 0,
+                        "query": query,
+                        "metadata": metadata,
+                    },
+                )
+            )
+
+        image_path = images[0]
+
+        try:
+            from models.grounding.grounding_model import (
+                create_grounding_model
+            )
+
+            model = create_grounding_model()
+
+            result = model.ground(
+                image_path=image_path,
+                query=query,
+            )
+
+            answer = result.get(
+                "answer",
+                ""
+            )
+
+            confidence = float(
+                result.get(
+                    "confidence",
+                    0.0
+                )
+            )
+
+            device = result.get(
+                "device",
+                "unknown"
+            )
+
+            # Grounding-specific evidence.
+            evidence = result.get(
+                "evidence",
+                []
+            )
+
+            # Keep detected regions available
+            # for the UI and future visualization.
+            regions = result.get(
+                "regions",
+                []
+            )
+
+            return asdict(
+                ToolResult(
+                    task=task,
+                    specialist=specialist,
+                    answer=answer,
+                    confidence=confidence,
+                    evidence=evidence,
+                    outputs={
+                        "image_count": len(images),
+                        "query": query,
+                        "metadata": metadata,
+                        "image_path": image_path,
+                        "device": device,
+                        "regions": regions,
+                    },
+                )
+            )
+
+        except Exception as exc:
+
+            return asdict(
+                ToolResult(
+                    task=task,
+                    specialist=specialist,
+                    answer="Grounding inference failed.",
+                    confidence=0.0,
+                    evidence=[],
+                    outputs={
+                        "image_count": len(images),
+                        "query": query,
+                        "metadata": metadata,
+                        "error": str(exc),
+                    },
+                )
+            )
+
+    # =========================================================
+    # OTHER SPECIALISTS
+    # =========================================================
 
     return asdict(
         ToolResult(
