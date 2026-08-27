@@ -10,6 +10,7 @@ from typing import List, Dict, Any
 
 from agent.router import route_query
 from agent.model_registry import get_tool
+from agent.executor import execute_specialist
 
 
 @dataclass
@@ -100,3 +101,82 @@ def create_execution_plan(
     )
 
     return asdict(plan)
+def execute_query(
+    query: str,
+    images=None,
+    modalities=None,
+    metadata=None,
+) -> Dict[str, Any]:
+    """
+    Complete SatQuery AI execution pipeline.
+
+    Steps:
+        1. Count uploaded images
+        2. Create execution plan
+        3. Validate inputs
+        4. Execute selected specialist
+        5. Return auditable result
+    """
+
+    if images is None:
+        images = []
+
+    if modalities is None:
+        modalities = []
+
+    if metadata is None:
+        metadata = {}
+
+    # ---------------------------------------------------------
+    # Step 1: Create execution plan
+    # ---------------------------------------------------------
+
+    plan = create_execution_plan(
+        query=query,
+        image_count=len(images),
+        modalities=modalities,
+    )
+
+    # ---------------------------------------------------------
+    # Step 2: Stop if inputs are invalid
+    # ---------------------------------------------------------
+
+    if not plan["valid"]:
+        return {
+            "success": False,
+            "plan": plan,
+            "result": {
+                "task": plan["task"],
+                "specialist": plan["specialist"],
+                "answer": "Input validation failed.",
+                "confidence": 0.0,
+                "evidence": [],
+                "outputs": {
+                    "image_count": len(images),
+                    "query": query,
+                    "metadata": metadata,
+                },
+            },
+        }
+
+    # ---------------------------------------------------------
+    # Step 3: Execute specialist
+    # ---------------------------------------------------------
+
+    result = execute_specialist(
+        task=plan["task"],
+        specialist=plan["specialist"],
+        images=images,
+        query=query,
+        metadata=metadata,
+    )
+
+    # ---------------------------------------------------------
+    # Step 4: Return complete auditable response
+    # ---------------------------------------------------------
+
+    return {
+        "success": True,
+        "plan": plan,
+        "result": result,
+    }
