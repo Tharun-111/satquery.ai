@@ -8,6 +8,8 @@ remote-sensing specialist tools.
 from dataclasses import dataclass, asdict
 from typing import Any, Dict, List
 
+from evidence.evidence_generator import generate_evidence
+
 
 @dataclass
 class ToolResult:
@@ -28,11 +30,6 @@ def execute_specialist(
 ) -> Dict[str, Any]:
     """
     Execute a specialist workflow.
-
-    Currently connected:
-        - VQA
-
-    Other specialists will be connected later.
     """
 
     if images is None:
@@ -42,109 +39,101 @@ def execute_specialist(
         metadata = {}
 
     # ---------------------------------------------------------
-    # VQA
+    # VQA specialist
     # ---------------------------------------------------------
 
     if task == "vqa":
 
-        if len(images) == 0:
-            result = ToolResult(
-                task=task,
-                specialist=specialist,
-                answer="No image was provided.",
-                confidence=0.0,
-                evidence=[],
-                outputs={
-                    "image_count": 0,
-                    "query": query,
-                    "metadata": metadata,
-                },
+        if len(images) < 1:
+            return asdict(
+                ToolResult(
+                    task=task,
+                    specialist=specialist,
+                    answer="No image supplied.",
+                    confidence=0.0,
+                    evidence=[],
+                    outputs={
+                        "image_count": 0,
+                        "query": query,
+                        "metadata": metadata,
+                    },
+                )
             )
 
-            return asdict(result)
+        image_path = images[0]
 
         try:
-            # Import only when VQA is actually requested.
             from models.vqa.vqa_model import create_vqa_model
 
-            # Create/load the VQA model.
             model = create_vqa_model()
 
-            # Use the first image for VQA.
-            image_path = images[0]
-
-            # Run real VQA inference.
-            vqa_result = model.answer(
+            result = model.answer(
                 image_path=image_path,
                 question=query,
             )
 
-            result = ToolResult(
-                task=task,
-                specialist=specialist,
-                answer=vqa_result.get(
-                    "answer",
-                    "No answer generated.",
-                ),
-                confidence=vqa_result.get(
-                    "confidence",
-                    0.0,
-                ),
-                evidence=vqa_result.get(
-                    "evidence",
-                    [],
-                ),
-                outputs={
-                    "image_count": len(images),
-                    "query": query,
-                    "metadata": metadata,
-                    "image_path": image_path,
-                    "device": vqa_result.get(
-                        "device",
-                        "unknown",
-                    ),
-                },
+            answer = result.get("answer", "")
+            confidence = float(result.get("confidence", 0.0))
+            device = result.get("device", "unknown")
+
+            evidence = generate_evidence(
+                image_path=image_path,
+                query=query,
+                answer=answer,
+                confidence=confidence,
+                device=device,
             )
 
-            # Preserve model error information if one occurred.
-            if "error" in vqa_result:
-                result.outputs["error"] = vqa_result["error"]
-
-            return asdict(result)
-
-        except Exception as e:
-
-            result = ToolResult(
-                task=task,
-                specialist=specialist,
-                answer="VQA execution failed.",
-                confidence=0.0,
-                evidence=[],
-                outputs={
-                    "image_count": len(images),
-                    "query": query,
-                    "metadata": metadata,
-                    "error": str(e),
-                },
+            return asdict(
+                ToolResult(
+                    task=task,
+                    specialist=specialist,
+                    answer=answer,
+                    confidence=confidence,
+                    evidence=evidence,
+                    outputs={
+                        "image_count": len(images),
+                        "query": query,
+                        "metadata": metadata,
+                        "image_path": image_path,
+                        "device": device,
+                    },
+                )
             )
 
-            return asdict(result)
+        except Exception as exc:
+
+            return asdict(
+                ToolResult(
+                    task=task,
+                    specialist=specialist,
+                    answer="VQA inference failed.",
+                    confidence=0.0,
+                    evidence=[],
+                    outputs={
+                        "image_count": len(images),
+                        "query": query,
+                        "metadata": metadata,
+                        "error": str(exc),
+                    },
+                )
+            )
 
     # ---------------------------------------------------------
-    # Other specialists - not connected yet
+    # Other specialists
     # ---------------------------------------------------------
 
-    result = ToolResult(
-        task=task,
-        specialist=specialist,
-        answer="Specialist execution not connected yet.",
-        confidence=0.0,
-        evidence=[],
-        outputs={
-            "image_count": len(images),
-            "query": query,
-            "metadata": metadata,
-        },
+    return asdict(
+        ToolResult(
+            task=task,
+            specialist=specialist,
+            answer="Specialist execution not connected yet.",
+            confidence=0.0,
+            evidence=[],
+            outputs={
+                "image_count": len(images),
+                "query": query,
+                "metadata": metadata,
+            },
+        )
     )
-
-    return asdict(result)
