@@ -24,8 +24,10 @@ class RemoteSensingGrounding:
     def __init__(
         self,
         model_name: str = "IDEA-Research/grounding-dino-tiny",
+        threshold: float = 0.30,
     ):
         self.model_name = model_name
+        self.threshold = threshold
 
         self.device = (
             "cuda"
@@ -38,6 +40,9 @@ class RemoteSensingGrounding:
         )
         print(
             f"Using device: {self.device}"
+        )
+        print(
+            f"Detection threshold: {self.threshold}"
         )
 
         device_index = (
@@ -62,7 +67,7 @@ class RemoteSensingGrounding:
         query: str,
     ) -> Dict[str, Any]:
         """
-        Locate regions relevant to the supplied query.
+        Locate reliable regions relevant to the query.
         """
 
         path = Path(image_path)
@@ -75,28 +80,45 @@ class RemoteSensingGrounding:
                 "image_path": image_path,
                 "query": query,
                 "device": self.device,
+                "regions": [],
                 "error": "Image file does not exist.",
             }
 
         try:
-            # IMPORTANT:
-            # GeoTIFF files cannot always be opened directly
-            # with PIL. Use the existing SatQuery raster
-            # preview pipeline to convert the raster to RGB.
+
+            # -------------------------------------------------
+            # Convert GeoTIFF to displayable RGB image
+            # -------------------------------------------------
+
             image = load_preview(
                 str(path)
             )
+
+            image_width, image_height = image.size
+
+            # -------------------------------------------------
+            # Build candidate labels
+            # -------------------------------------------------
 
             labels = self._build_labels(
                 query
             )
 
+            # -------------------------------------------------
+            # Grounding inference
+            # -------------------------------------------------
+
             detections = self.detector(
                 image,
                 candidate_labels=labels,
+                threshold=self.threshold,
             )
 
             regions: List[Dict[str, Any]] = []
+
+            # -------------------------------------------------
+            # Validate detections
+            # -------------------------------------------------
 
             for detection in detections:
 
@@ -105,54 +127,100 @@ class RemoteSensingGrounding:
                     {}
                 )
 
+                xmin = int(
+                    box.get("xmin", 0)
+                )
+                ymin = int(
+                    box.get("ymin", 0)
+                )
+                xmax = int(
+                    box.get("xmax", 0)
+                )
+                ymax = int(
+                    box.get("ymax", 0)
+                )
+
+                score = float(
+                    detection.get(
+                        "score",
+                        0.0
+                    )
+                )
+
+                label = detection.get(
+                    "label",
+                    ""
+                )
+
+                # ---------------------------------------------
+                # Reject invalid boxes
+                # ---------------------------------------------
+
+                if xmax <= xmin or ymax <= ymin:
+                    continue
+
+                box_width = xmax - xmin
+                box_height = ymax - ymin
+
+                box_area = (
+                    box_width *
+                    box_height
+                )
+
+                image_area = (
+                    image_width *
+                    image_height
+                )
+
+                area_ratio = (
+                    box_area /
+                    image_area
+                )
+
+                # ---------------------------------------------
+                # Reject boxes covering almost the entire image
+                #
+                # These were observed with the current model
+                # on test_satellite.tif.
+                # ---------------------------------------------
+
+                if area_ratio >= 0.95:
+                    continue
+
                 regions.append(
                     {
-                        "label": detection.get(
-                            "label",
-                            ""
-                        ),
-                        "score": float(
-                            detection.get(
-                                "score",
-                                0.0
-                            )
-                        ),
+                        "label": label,
+                        "score": score,
                         "box": {
-                            "xmin": int(
-                                box.get(
-                                    "xmin",
-                                    0
-                                )
-                            ),
-                            "ymin": int(
-                                box.get(
-                                    "ymin",
-                                    0
-                                )
-                            ),
-                            "xmax": int(
-                                box.get(
-                                    "xmax",
-                                    0
-                                )
-                            ),
-                            "ymax": int(
-                                box.get(
-                                    "ymax",
-                                    0
-                                )
-                            ),
+                            "xmin": xmin,
+                            "ymin": ymin,
+                            "xmax": xmax,
+                            "ymax": ymax,
                         },
+                        "area_ratio": round(
+                            area_ratio,
+                            4
+                        ),
                     }
                 )
 
+            # -------------------------------------------------
+            # Sort strongest detections first
+            # -------------------------------------------------
+
+            regions.sort(
+                key=lambda item:
+                item["score"],
+                reverse=True,
+            )
+
+            # -------------------------------------------------
+            # Build answer
+            # -------------------------------------------------
+
             if regions:
 
-                best = max(
-                    regions,
-                    key=lambda item:
-                    item["score"],
-                )
+                best = regions[0]
 
                 answer = (
                     f"Located "
@@ -166,16 +234,22 @@ class RemoteSensingGrounding:
             else:
 
                 answer = (
-                    "No matching region "
-                    "was detected."
+                    "No reliable matching "
+                    "region was detected."
                 )
 
                 confidence = 0.0
 
+            # -------------------------------------------------
+            # Evidence
+            # -------------------------------------------------
+
             evidence = [
                 f"Source image: {path.name}",
                 f"Grounding query: {query}",
-                f"Detected regions: {len(regions)}",
+                f"Candidate labels: {labels}",
+                f"Detection threshold: {self.threshold:.2f}",
+                f"Reliable regions: {len(regions)}",
                 f"Inference device: {self.device}",
             ]
 
@@ -199,6 +273,7 @@ class RemoteSensingGrounding:
                 "image_path": image_path,
                 "query": query,
                 "device": self.device,
+                "regions": [],
                 "error": str(error),
             }
 
