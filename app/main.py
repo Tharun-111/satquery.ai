@@ -2,12 +2,12 @@ import os
 import streamlit as st
 
 from agent.validator import validate_image
-from agent.router import route_query
 from processing.image_processor import analyze_image
+from agent.controller import execute_query
 
 
 # ============================================================
-# PAGE CONFIGURATION
+# PAGE CONFIG
 # ============================================================
 
 st.set_page_config(
@@ -29,12 +29,10 @@ st.subheader(
 
 st.markdown(
     """
-    SatQuery AI is an agentic remote-sensing assistant.
-
     Upload satellite imagery, ask a natural-language question,
-    and the system validates the image, analyzes the imagery,
-    selects the appropriate specialist workflow, and produces
-    evidence for the final answer.
+    and SatQuery AI will validate the image, process the imagery,
+    select the appropriate specialist, run the model, and produce
+    auditable evidence.
     """
 )
 
@@ -51,8 +49,8 @@ if "validation_result" not in st.session_state:
 if "analysis_result" not in st.session_state:
     st.session_state.analysis_result = None
 
-if "route_result" not in st.session_state:
-    st.session_state.route_result = None
+if "query_result" not in st.session_state:
+    st.session_state.query_result = None
 
 
 # ============================================================
@@ -63,71 +61,62 @@ st.header("1. Upload Remote-Sensing Imagery")
 
 uploaded_file = st.file_uploader(
     "Upload optical/multispectral or SAR image",
-    type=[
-        "tif",
-        "tiff",
-        "png",
-        "jpg",
-        "jpeg"
-    ]
+    type=["tif", "tiff", "png", "jpg", "jpeg"]
 )
 
 
 if uploaded_file is not None:
 
-    # Create demo directory
-    os.makedirs(
-        "data/demo",
-        exist_ok=True
-    )
+    os.makedirs("data/demo", exist_ok=True)
 
-    # Save uploaded image
     upload_path = os.path.join(
         "data",
         "demo",
         uploaded_file.name
     )
 
-    with open(upload_path, "wb") as file:
-        file.write(
-            uploaded_file.getbuffer()
-        )
+    with open(upload_path, "wb") as f:
+        f.write(uploaded_file.getbuffer())
 
     st.success(
         f"Image uploaded successfully: {uploaded_file.name}"
     )
 
-    # --------------------------------------------------------
-    # IMAGE MODALITY
-    # --------------------------------------------------------
+
+    # ========================================================
+    # MODALITY
+    # ========================================================
 
     modality = st.selectbox(
         "Image modality",
-        [
-            "optical",
-            "sar"
-        ]
+        ["optical", "sar"]
     )
 
-    # --------------------------------------------------------
-    # VALIDATION
-    # --------------------------------------------------------
 
-    validation_result = validate_image(
-        upload_path
-    )
+    # ========================================================
+    # 2. VALIDATION
+    # ========================================================
 
-    st.session_state.validation_result = (
-        validation_result
-    )
+    st.header("2. Input Validation")
 
-    st.subheader("Input Validation")
+    try:
+
+        validation_result = validate_image(upload_path)
+
+        st.session_state.validation_result = validation_result
+
+    except Exception as error:
+
+        st.error(
+            f"Image validation failed: {error}"
+        )
+
+        st.stop()
+
 
     if validation_result["valid"]:
 
-        st.success(
-            "✅ Input image is valid"
-        )
+        st.success("✅ Input image is valid")
 
         col1, col2, col3, col4 = st.columns(4)
 
@@ -164,404 +153,306 @@ if uploaded_file is not None:
     else:
 
         st.error(
-            "❌ Input image is invalid"
-        )
-
-        st.write(
-            validation_result["message"]
-        )
-
-    # --------------------------------------------------------
-    # IMAGE PREVIEW
-    # --------------------------------------------------------
-
-    if uploaded_file.name.lower().endswith(
-        (
-            ".png",
-            ".jpg",
-            ".jpeg"
-        )
-    ):
-
-        st.image(
-            uploaded_file,
-            caption="Uploaded Remote-Sensing Image",
-            width="stretch"
-        )
-
-
-st.divider()
-
-
-# ============================================================
-# 2. NATURAL LANGUAGE QUERY
-# ============================================================
-
-st.header("2. Ask SatQuery AI")
-
-query = st.text_area(
-    "Enter your natural-language query",
-
-    placeholder=(
-        "Examples:\n"
-        "Describe the land-cover and major objects visible in this image.\n"
-        "How many buildings are visible?\n"
-        "Highlight the water body in this image."
-    ),
-
-    height=130
-)
-
-
-# ============================================================
-# 3. ANALYZE BUTTON
-# ============================================================
-
-analyze_button = st.button(
-    "🚀 Analyze Image",
-    type="primary",
-    width="stretch"
-)
-
-
-if analyze_button:
-
-    # --------------------------------------------------------
-    # CHECK IMAGE
-    # --------------------------------------------------------
-
-    if uploaded_file is None:
-
-        st.warning(
-            "Please upload an image first."
-        )
-
-        st.stop()
-
-
-    # --------------------------------------------------------
-    # CHECK QUERY
-    # --------------------------------------------------------
-
-    if not query.strip():
-
-        st.warning(
-            "Please enter a natural-language query."
-        )
-
-        st.stop()
-
-
-    # --------------------------------------------------------
-    # CHECK VALIDATION
-    # --------------------------------------------------------
-
-    validation_result = (
-        st.session_state.validation_result
-    )
-
-    if (
-        validation_result is None
-        or not validation_result["valid"]
-    ):
-
-        st.error(
-            "The uploaded image did not pass validation."
+            validation_result.get(
+                "message",
+                "Invalid image."
+            )
         )
 
         st.stop()
 
 
     # ========================================================
-    # PROCESS IMAGE
+    # 3. IMAGE PROCESSING
     # ========================================================
 
-    with st.spinner(
-        "🔍 Processing remote-sensing image..."
-    ):
+    st.header("3. Remote-Sensing Image")
 
-        try:
+    try:
+
+        with st.spinner("🛰️ Processing remote-sensing image..."):
 
             analysis_result = analyze_image(
                 upload_path
             )
 
-            st.session_state.analysis_result = (
-                analysis_result
-            )
+        st.session_state.analysis_result = analysis_result
 
-        except Exception as error:
+    except Exception as error:
 
-            st.error(
-                f"Image processing failed: {error}"
-            )
-
-            st.stop()
-
-
-    # ========================================================
-    # AGENT ROUTING
-    # ========================================================
-
-    with st.spinner(
-        "🤖 SatQuery AI is selecting the specialist..."
-    ):
-
-        try:
-
-            # IMPORTANT:
-            # route_query() expects positional arguments:
-            #
-            # route_query(query, number_of_inputs, modalities)
-            #
-            # Do NOT use num_inputs= here.
-
-            route_result = route_query(
-                query,
-                1,
-                [modality]
-            )
-
-            st.session_state.route_result = (
-                route_result
-            )
-
-        except Exception as error:
-
-            st.error(
-                f"Agent routing failed: {error}"
-            )
-
-            st.stop()
-
-
-    # ========================================================
-    # SUCCESS
-    # ========================================================
-
-    st.success(
-        "✅ SatQuery AI completed the initial analysis pipeline."
-    )
-
-
-    # ========================================================
-    # 4. AGENT DECISION
-    # ========================================================
-
-    st.header("3. Agent Decision")
-
-    route_result = (
-        st.session_state.route_result
-    )
-
-    col1, col2, col3 = st.columns(3)
-
-    with col1:
-
-        st.metric(
-            "Selected Task",
-            route_result.task.upper()
+        st.error(
+            f"Image processing failed: {error}"
         )
 
-    with col2:
-
-        st.metric(
-            "Confidence",
-            f"{route_result.confidence:.0%}"
-        )
-
-    with col3:
-
-        st.metric(
-            "Input Modality",
-            modality.upper()
-        )
+        st.stop()
 
 
-    st.info(
-        f"""
-        **Selected Specialist:**  
-        {route_result.specialist}
+    # Display image
+    display_image = analysis_result.get("display_image")
 
-        **Routing Reason:**  
-        {route_result.reason}
-        """
-    )
-
-
-    # ========================================================
-    # 5. VISUAL EVIDENCE
-    # ========================================================
-
-    st.header("4. Visual Evidence")
-
-    analysis_result = (
-        st.session_state.analysis_result
-    )
-
-    if analysis_result.get(
-        "display_image"
-    ) is not None:
+    if display_image is not None:
 
         st.image(
-            analysis_result["display_image"],
+            display_image,
             caption="Processed Remote-Sensing Image",
             width="stretch"
         )
 
-
-    # ========================================================
-    # 6. IMAGE METADATA
-    # ========================================================
-
-    st.header("5. Image Evidence")
-
-    metadata = (
-        analysis_result["metadata"]
-    )
-
-    col1, col2 = st.columns(2)
-
-    with col1:
-
-        st.subheader(
-            "Image Metadata"
-        )
-
-        st.json(
-            metadata
-        )
-
-    with col2:
-
-        st.subheader(
-            "Band Statistics"
-        )
-
-        st.json(
-            analysis_result["statistics"]
-        )
-
-
-    # ========================================================
-    # 7. EXECUTION TRACE
-    # ========================================================
-
-    st.header("6. Agent Execution Trace")
-
-    execution_trace = {
-
-        "query": query,
-
-        "input_count": 1,
-
-        "input_modality": modality,
-
-        "selected_task": route_result.task,
-
-        "selected_specialist": (
-            route_result.specialist
-        ),
-
-        "routing_confidence": (
-            route_result.confidence
-        ),
-
-        "image_processor": (
-            "SatQuery Image Processing Engine"
-        ),
-
-        "input_validation": "PASSED",
-
-        "visual_evidence": "GENERATED"
-
-    }
-
-    st.json(
-        execution_trace
-    )
-
-
-    # ========================================================
-    # 8. SPECIALIST STATUS
-    # ========================================================
-
-    st.header("7. Specialist Workflow")
-
-    if route_result.task == "vqa":
-
-        st.info(
-            """
-            🧠 **Remote-Sensing VQA Specialist Selected**
-
-            The agent identified this request as a
-            visual question-answering task.
-
-            Image evidence has been prepared for the
-            remote-sensing VQA model.
-            """
-        )
-
-    elif route_result.task == "grounding":
-
-        st.info(
-            """
-            🎯 **Remote-Sensing Grounding Specialist Selected**
-
-            The agent identified this request as a
-            text-guided spatial grounding task.
-
-            Image evidence has been prepared for the
-            grounding model.
-            """
-        )
-
-    elif route_result.task == "captioning":
-
-        st.info(
-            """
-            📝 **Remote-Sensing Captioning Specialist Selected**
-
-            The agent identified this request as an
-            image captioning / scene description task.
-            """
-        )
-
-    elif route_result.task == "change_analysis":
-
-        st.warning(
-            """
-            🔄 **Change Analysis Selected**
-
-            Change analysis requires two spatially
-            corresponding images acquired at different
-            times.
-
-            The current single-image input cannot execute
-            the change workflow yet.
-            """
-        )
-
-    elif route_result.task == "cross_modal_analysis":
-
-        st.warning(
-            """
-            🛰️ **Optical-SAR Fusion Selected**
-
-            Cross-modal analysis requires two images:
-
-            1. Optical / multispectral
-            2. SAR
-
-            The current interface contains only one image.
-            """
-        )
-
     else:
 
-        st.info(
-            "Specialist workflow selected successfully."
+        st.warning(
+            "Preview image could not be generated."
         )
+
+
+    # ========================================================
+    # METADATA
+    # ========================================================
+
+    with st.expander(
+        "📊 Image Metadata and Band Statistics"
+    ):
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+
+            st.subheader("Image Metadata")
+
+            st.json(
+                analysis_result.get(
+                    "metadata",
+                    {}
+                )
+            )
+
+        with col2:
+
+            st.subheader("Band Statistics")
+
+            st.json(
+                analysis_result.get(
+                    "statistics",
+                    {}
+                )
+            )
+
+
+    # ========================================================
+    # 4. ASK SATQUERY AI
+    # ========================================================
+
+    st.header("4. Ask SatQuery AI")
+
+    query = st.text_input(
+        "Enter your question",
+        placeholder="Example: Is there water?"
+    )
+
+
+    analyze_button = st.button(
+        "🚀 Analyze Image",
+        type="primary"
+    )
+
+
+    # ========================================================
+    # RUN COMPLETE AGENT
+    # ========================================================
+
+    if analyze_button:
+
+        if not query.strip():
+
+            st.warning(
+                "Please enter a question."
+            )
+
+        else:
+
+            try:
+
+                with st.spinner(
+                    "🤖 SatQuery AI is analyzing the image..."
+                ):
+
+                    result = execute_query(
+                        query,
+                        [upload_path],
+                        [modality]
+                    )
+
+                st.session_state.query_result = result
+
+            except Exception as error:
+
+                st.error(
+                    f"SatQuery AI execution failed: {error}"
+                )
+
+                st.exception(error)
+
+
+    # ========================================================
+    # 5. RESULT
+    # ========================================================
+
+    result = st.session_state.query_result
+
+    if result is not None:
+
+        st.divider()
+
+        st.header("5. SatQuery AI Result")
+
+        if result.get("success"):
+
+            specialist_result = result.get(
+                "result",
+                {}
+            )
+
+            answer = specialist_result.get(
+                "answer",
+                "No answer returned."
+            )
+
+            confidence = specialist_result.get(
+                "confidence",
+                0.0
+            )
+
+            # ------------------------------------------------
+            # ANSWER
+            # ------------------------------------------------
+
+            st.success(
+                f"Answer: {answer}"
+            )
+
+            st.metric(
+                "Model Confidence",
+                f"{confidence:.0%}"
+            )
+
+
+            # ------------------------------------------------
+            # EXECUTION PLAN
+            # ------------------------------------------------
+
+            st.subheader(
+                "🤖 Agent Decision"
+            )
+
+            plan = result.get(
+                "plan",
+                {}
+            )
+
+            col1, col2, col3 = st.columns(3)
+
+            with col1:
+
+                st.metric(
+                    "Selected Task",
+                    str(
+                        plan.get(
+                            "task",
+                            "unknown"
+                        )
+                    ).upper()
+                )
+
+            with col2:
+
+                st.metric(
+                    "Specialist",
+                    plan.get(
+                        "specialist",
+                        "Unknown"
+                    )
+                )
+
+            with col3:
+
+                st.metric(
+                    "Routing Confidence",
+                    f"{plan.get('confidence', 0):.0%}"
+                )
+
+
+            st.info(
+                f"""
+                **Routing reason:**  
+                {plan.get('reason', 'Not available.')}
+
+                **Validation:**  
+                {plan.get('validation_message', 'Not available.')}
+                """
+            )
+
+
+            # ------------------------------------------------
+            # EVIDENCE
+            # ------------------------------------------------
+
+            st.subheader(
+                "🔎 Evidence"
+            )
+
+            evidence = specialist_result.get(
+                "evidence",
+                []
+            )
+
+            if evidence:
+
+                for item in evidence:
+
+                    st.write(
+                        f"• {item}"
+                    )
+
+            else:
+
+                st.info(
+                    "No evidence records were returned."
+                )
+
+
+            # ------------------------------------------------
+            # OUTPUT DETAILS
+            # ------------------------------------------------
+
+            with st.expander(
+                "🔧 Specialist Output"
+            ):
+
+                st.json(
+                    specialist_result.get(
+                        "outputs",
+                        {}
+                    )
+                )
+
+
+            # ------------------------------------------------
+            # COMPLETE EXECUTION TRACE
+            # ------------------------------------------------
+
+            with st.expander(
+                "🧾 Complete Execution Trace"
+            ):
+
+                st.json(result)
+
+        else:
+
+            st.error(
+                "SatQuery AI could not complete the request."
+            )
+
+            st.json(result)
 
 
 # ============================================================
