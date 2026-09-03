@@ -1,8 +1,8 @@
 from pathlib import Path
 
-import cv2
 import numpy as np
 import torch
+from PIL import Image
 from transformers import AutoImageProcessor, AutoModel
 
 
@@ -47,23 +47,7 @@ def _read_image(path):
     """
     path = Path(path)
 
-    image = cv2.imread(str(path), cv2.IMREAD_UNCHANGED)
-
-    if image is None:
-        raise ValueError(f"Unable to read image: {path}")
-
-    # Handle grayscale
-    if len(image.shape) == 2:
-        image = cv2.cvtColor(image, cv2.COLOR_GRAY2RGB)
-
-    # Handle BGR / BGRA
-    elif image.shape[2] == 3:
-        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-
-    elif image.shape[2] == 4:
-        image = cv2.cvtColor(image, cv2.COLOR_BGRA2RGB)
-
-    return image
+    return np.asarray(Image.open(path).convert("RGB"))
 
 
 def _resize_pair(image1, image2):
@@ -73,10 +57,11 @@ def _resize_pair(image1, image2):
     height, width = image1.shape[:2]
 
     if image2.shape[:2] != (height, width):
-        image2 = cv2.resize(
-            image2,
-            (width, height),
-            interpolation=cv2.INTER_LINEAR
+        image2 = np.asarray(
+            Image.fromarray(image2).resize(
+                (width, height),
+                Image.Resampling.BILINEAR
+            )
         )
 
     return image1, image2
@@ -98,44 +83,17 @@ def detect_change(image_before, image_after, threshold=30):
         image_after
     )
 
-    # Convert to grayscale
-    gray_before = cv2.cvtColor(
-        image_before,
-        cv2.COLOR_RGB2GRAY
+    gray_before = np.dot(
+        image_before[..., :3],
+        [0.299, 0.587, 0.114]
     )
-
-    gray_after = cv2.cvtColor(
-        image_after,
-        cv2.COLOR_RGB2GRAY
+    gray_after = np.dot(
+        image_after[..., :3],
+        [0.299, 0.587, 0.114]
     )
-
-    # Absolute pixel difference
-    difference = cv2.absdiff(
-        gray_before,
-        gray_after
-    )
-
-    # Threshold
-    _, change_mask = cv2.threshold(
-        difference,
-        threshold,
-        255,
-        cv2.THRESH_BINARY
-    )
-
-    # Remove small noise
-    kernel = np.ones((3, 3), np.uint8)
-
-    change_mask = cv2.morphologyEx(
-        change_mask,
-        cv2.MORPH_OPEN,
-        kernel
-    )
-
-    change_mask = cv2.morphologyEx(
-        change_mask,
-        cv2.MORPH_CLOSE,
-        kernel
+    difference = np.abs(gray_before - gray_after)
+    change_mask = np.where(difference >= threshold, 255, 0).astype(
+        np.uint8
     )
 
     changed_pixels = int(
@@ -188,15 +146,10 @@ def create_change_overlay(
     ]
 
     # Blend with original
-    result = cv2.addWeighted(
-        image_after,
-        0.65,
-        overlay,
-        0.35,
-        0
-    )
-
-    return result
+    return (
+        image_after.astype(np.float32) * 0.65
+        + overlay.astype(np.float32) * 0.35
+    ).clip(0, 255).astype(np.uint8)
 
 
 def analyze_change(

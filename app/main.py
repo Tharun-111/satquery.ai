@@ -727,8 +727,6 @@ else:
                     # DOWNLOAD EVIDENCE
                     # ------------------------------------------------
 
-                    import cv2
-
                     output_file = (
                         "outputs/change_evidence.png"
                     )
@@ -738,12 +736,11 @@ else:
                         exist_ok=True
                     )
 
-                    cv2.imwrite(
+                    from PIL import Image
+
+                    Image.fromarray(overlay).save(
                         output_file,
-                        cv2.cvtColor(
-                            overlay,
-                            cv2.COLOR_RGB2BGR
-                        )
+                        format="PNG"
                     )
 
                     with open(

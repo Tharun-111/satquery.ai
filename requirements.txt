@@ -2,7 +2,6 @@ streamlit
 numpy
 Pillow
 rasterio
-opencv-python-headless
 torch
 torchvision
 transformers
