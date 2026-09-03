@@ -8,6 +8,8 @@ image validation, deterministic task routing, pretrained vision models, and
 auditable evidence. It is designed for rapid exploration of optical,
 multispectral, SAR, and other satellite imagery.
 
+[**Launch the live application**](https://satqueryai-thxxxn.streamlit.app/)
+
 ## Features
 
 ### 1. Single Image Analysis
