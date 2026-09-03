@@ -5,3 +5,7 @@ temp/
 outputs/
 
 hf_cache/
+
+# Local uploads and generated demo evidence
+data/demo/*
+!data/demo/.gitkeep
