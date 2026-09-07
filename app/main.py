@@ -150,8 +150,7 @@ if analysis_mode in [
         ):
             st.image(
                 uploaded_file,
-                caption="Uploaded Remote-Sensing Image",
-                width="stretch"
+                caption="Uploaded Remote-Sensing Image"
             )
 
     st.divider()
@@ -183,7 +182,6 @@ if analysis_mode in [
 
     if st.button(
         "🚀 Analyze Image",
-        width="stretch",
         key="single_analyze"
     ):
 
@@ -538,8 +536,7 @@ else:
             ):
                 st.image(
                     before_file,
-                    caption="BEFORE",
-                    width="stretch"
+                    caption="BEFORE"
                 )
 
     if after_file is not None:
@@ -551,8 +548,7 @@ else:
             ):
                 st.image(
                     after_file,
-                    caption="AFTER",
-                    width="stretch"
+                    caption="AFTER"
                 )
 
     st.divider()
@@ -577,7 +573,6 @@ else:
 
     if st.button(
         "🔄 Analyze Change",
-        width="stretch",
         key="change_analyze"
     ):
 
@@ -723,8 +718,7 @@ else:
                         caption=(
                             "Detected changes highlighted "
                             "on the AFTER image"
-                        ),
-                        width="stretch"
+                        )
                     )
 
                     # ------------------------------------------------
