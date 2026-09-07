@@ -2,7 +2,6 @@ from pathlib import Path
 from typing import Dict, Any
 
 import numpy as np
-import rasterio
 from PIL import Image
 
 
@@ -29,6 +28,8 @@ def read_raster_metadata(path: str) -> Dict[str, Any]:
     }
 
     try:
+        import rasterio
+
         with rasterio.open(file_path) as src:
 
             result["width"] = src.width
@@ -64,6 +65,13 @@ def load_preview(path: str, max_size: int = 1024) -> Image.Image:
     """
 
     file_path = Path(path)
+
+    try:
+        import rasterio
+    except ImportError as exc:
+        raise RuntimeError(
+            "TIFF preview support requires rasterio, which is not installed."
+        ) from exc
 
     with rasterio.open(file_path) as src:
 

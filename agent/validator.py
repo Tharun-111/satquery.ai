@@ -1,8 +1,5 @@
 from pathlib import Path
 
-import rasterio
-
-
 SUPPORTED_EXTENSIONS = {".tif", ".tiff", ".png", ".jpg", ".jpeg"}
 
 
@@ -40,6 +37,8 @@ def validate_image(file_path):
     # Rasterio handles TIFF/GeoTIFF.
     if path.suffix.lower() in {".tif", ".tiff"}:
         try:
+            import rasterio
+
             with rasterio.open(path) as src:
                 result["valid"] = True
                 result["format"] = "GeoTIFF/TIFF"
@@ -53,6 +52,11 @@ def validate_image(file_path):
 
                 result["message"] = "Image validated successfully."
 
+        except ImportError:
+            result["message"] = (
+                "TIFF support is unavailable in this deployment. "
+                "Please upload a PNG or JPEG image."
+            )
         except Exception as exc:
             result["message"] = f"Could not read raster: {exc}"
 

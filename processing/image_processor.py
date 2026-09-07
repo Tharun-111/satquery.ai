@@ -2,7 +2,6 @@ from pathlib import Path
 
 import numpy as np
 from PIL import Image
-import rasterio
 
 
 def load_image(file_path):
@@ -45,6 +44,12 @@ def load_image(file_path):
     # TIFF / GeoTIFF
     # ---------------------------------------------------------
     if extension in {".tif", ".tiff"}:
+        try:
+            import rasterio
+        except ImportError as exc:
+            raise RuntimeError(
+                "TIFF support requires rasterio, which is not installed."
+            ) from exc
 
         with rasterio.open(path) as src:
 
