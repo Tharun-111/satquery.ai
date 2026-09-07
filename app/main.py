@@ -9,9 +9,6 @@ if str(PROJECT_ROOT) not in sys.path:
 
 import streamlit as st
 
-from agent.router import route_query
-
-
 st.set_page_config(
     page_title="SatQuery AI",
     page_icon="🛰️",
@@ -212,6 +209,7 @@ if analysis_mode in [
             )
 
         else:
+            from agent.router import route_query
 
             # Determine basic modality
             if validation_result["bands"] >= 3:
@@ -602,6 +600,7 @@ else:
             )
 
         else:
+            from agent.router import route_query
 
             # ------------------------------------------------
             # AGENT ROUTING
