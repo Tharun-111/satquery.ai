@@ -9,13 +9,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 import streamlit as st
 
-from agent.validator import validate_image
 from agent.router import route_query
-from models.vqa_model import answer_question
-from models.caption_model import create_caption_model
-from models.disaster_model import create_disaster_model
-from models.grounding.grounding_model import create_grounding_model
-from processing.change_detectoe import analyze_change
 
 
 st.set_page_config(
@@ -95,6 +89,7 @@ if analysis_mode in [
     validation_result = None
 
     if uploaded_file is not None:
+        from agent.validator import validate_image
 
         image_path = "data/demo/" + uploaded_file.name
 
@@ -264,6 +259,8 @@ if analysis_mode in [
             # ------------------------------------------------
 
             if analysis_mode == "Disaster Analysis":
+                from models.disaster_model import create_disaster_model
+
                 st.subheader("🚨 Disaster Analysis")
 
                 with st.spinner("Running CLIP disaster classification..."):
@@ -284,6 +281,8 @@ if analysis_mode in [
             # ------------------------------------------------
 
             elif decision.task == "captioning":
+                from models.caption_model import create_caption_model
+
                 st.subheader("📝 Remote-Sensing Image Caption")
 
                 with st.spinner("Running BLIP image captioning..."):
@@ -306,6 +305,7 @@ if analysis_mode in [
             # ------------------------------------------------
 
             elif decision.task == "vqa":
+                from models.vqa_model import answer_question
 
                 st.subheader(
                     "🧠 Remote-Sensing VQA"
@@ -373,6 +373,10 @@ if analysis_mode in [
                 )
 
                 with st.spinner("Running Grounding DINO..."):
+                    from models.grounding.grounding_model import (
+                        create_grounding_model
+                    )
+
                     grounding_model = create_grounding_model()
                     result = grounding_model.ground(
                         image_path,
@@ -651,6 +655,7 @@ else:
             ):
 
                 try:
+                    from processing.change_detectoe import analyze_change
 
                     result = analyze_change(
                         before_path,
